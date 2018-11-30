@@ -1,0 +1,46 @@
+--- 
+jobs: 
+  build: 
+    docker: 
+      - 
+        image: "circleci/openjdk:8-jdk"
+    environment: 
+      JVM_OPTS: "-Xmx3200m"
+      TERM: dumb
+    steps: 
+      - checkout
+      - 
+        restore_cache: 
+          keys: 
+            - "v1-dependencies-{{ checksum \"build.gradle\" }}"
+            - v1-dependencies-
+      - 
+        run: "gradle dependencies"
+      - 
+        save_cache: 
+          key: "v1-dependencies-{{ checksum \"build.gradle\" }}"
+          paths: 
+            - ~/.gradle
+      - 
+        run: "gradle build"
+      - 
+        run: "gradle test"
+      - 
+        run: 
+          command: |
+              curl -v -L -o cf-cli_amd64.deb 'https://cli.run.pivotal.io/stable?release=debian64&source=github'
+              sudo dpkg -i cf-cli_amd64.deb
+              cf -v
+              cf api https://api.run.pivotal.io  # alternately target your private Cloud Foundry deployment
+              cf auth "$CF_USER" "$CF_PASSWORD"
+          name: "Setup CF CLI"
+      - 
+        run: 
+          command: "cf target -o \"$CF_ORG\" -s \"$CF_SPACE\""
+          name: "Setting up Org and target space"
+      - 
+        run: 
+          command: "cd /tmp/app/build/libs && cf push forex-service -p forex-service-0.0.1-SNAPSHOT.jar"
+          name: "Pushing app to pivotal"
+    working_directory: /tmp/app
+version: 2
